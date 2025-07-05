@@ -82,38 +82,34 @@ def convert_csv(input_file_path, output_file_path):
         # ヘッダー行の処理
         header_row = lines[0]
         
-        # 削除対象のカラム名
-        columns_to_delete = [
-            '施設備品ID', '施設備品名', '利用目的', '内容', '情報公開レベル',
-            '重要度', '予約種別', 'ＩＤ（システムＩＤ：自動発番）', 'フラグ',
-            'アイコン番号', '所有者ID', '所有者名'
-        ]
+        # 元のヘッダーをインデックス取得用に保持 (データ行処理で元のカラム名からインデックスを取得するため)
+        original_header_for_indexing = list(lines[0])
+
+        # ユーザーの指定に基づき、新しいヘッダーを直接定義
+        new_csv_header = ['会議室名', '開始日時', '終了日時', '利用目的詳細']
+        logging.info(f"新しいCSVヘッダーを定義しました: {new_csv_header}")
         
-        # 削除するカラムのインデックスを特定（逆順にして削除時にインデックスがずれないようにする）
-        # 元のheader_rowからインデックスを収集
-        delete_indices = sorted([
-            i for i, col in enumerate(header_row) if col in columns_to_delete
-        ], reverse=True)
+        result_rows.append(new_csv_header)
 
-        # ヘッダーから削除対象のカラムを削除
-        for index in delete_indices:
-            del header_row[index]
-
-        # 会議室名カラムをヘッダーの先頭に追加
-        header_row.insert(0, '会議室名')
-        result_rows.append(header_row)
-
-        # '利用目的詳細' カラムの最終的なインデックスを特定
-        purpose_detail_final_index = -1
-        try:
-            if '利用目的詳細' in header_row:
-                purpose_detail_final_index = header_row.index('利用目的詳細')
-                logging.info(f"最終ヘッダーで'利用目的詳細'カラムをインデックス {purpose_detail_final_index} で検出しました。")
-        except ValueError:
-            logging.warning("'利用目的詳細'カラムが最終ヘッダーに見つかりませんでした。")
-            # カラムがないので -1 のままにする
+        # '利用目的詳細' カラムの最終的なインデックスを特定 (直接定義した新ヘッダーに基づく)
+        purpose_detail_final_index = new_csv_header.index('利用目的詳細')
+        logging.info(f"最終ヘッダーで'利用目的詳細'カラムをインデックス {purpose_detail_final_index} で検出しました。")
 
         # データ行の処理
+        # 元のヘッダーから必要なカラムのインデックスを取得
+        orig_header = lines[0]
+        try:
+            kaishi_nichi_idx = orig_header.index('開始日')
+            kaishi_jikan_idx = orig_header.index('開始時刻')
+            shuryo_nichi_idx = orig_header.index('終了日')
+            shuryo_jikan_idx = orig_header.index('終了時刻')
+            logging.info("開始日、開始時刻、終了日、終了時刻のインデックスを正常に取得しました。")
+        except ValueError as e:
+            logging.error(f"必須カラムのインデックスが見つかりません。エラー: {e}")
+            print(f"エラー: 必須カラムが見つかりません。CSVファイルに '開始日', '開始時刻', '終了日', '終了時刻' が存在することを確認してください。")
+            return
+
+
         for i, row in enumerate(lines[1:]):
             if not row:
                 continue
@@ -126,32 +122,54 @@ def convert_csv(input_file_path, output_file_path):
                 continue
 
             # 予約情報の行に会議室名を追加
-            # 予約情報の行にのみ削除を適用する
             if current_kaigishitsu and len(row) > 2 and row[2].strip():
-                new_row = row[:] # オリジナルを保持するためスライスでコピー
-                
-                # データ行からも削除対象のカラムを削除
-                # ヘッダーと同じ順序で削除を行うことでインデックスのずれに対応
-                for index in delete_indices:
-                    del new_row[index]
+                # 日時カラムの値を取得 (processed_rowに追加する前に取得しておく)
+                try:
+                    start_datetime_str = f"{row[kaishi_nichi_idx]} {row[kaishi_jikan_idx]}"
+                    logging.info(f"開始日時: {start_datetime_str} を生成しました。")
+                    
+                    end_datetime_str = f"{row[shuryo_nichi_idx]} {row[shuryo_jikan_idx]}"
+                    logging.info(f"終了日時: {end_datetime_str} を生成しました。")
 
-                # 会議室名カラムをデータ行の先頭に追加
-                new_row.insert(0, current_kaigishitsu)
+                except IndexError as e:
+                    logging.warning(f"日時カラムのデータ取得中にインデックスエラーが発生しました: {e} 行データ: {row}")
+                    continue # この行はスキップ
+
+
+                # processd_rowをnew_csv_headerの構造に基づいてゼロから構築
+                # processed_rowをnew_csv_headerの構造に基づいてゼロから構築
+                # processd_rowをnew_csv_headerの構造に基づいてゼロから構築
+                processed_row = []
                 
-                # "仙台合同庁舎" と "／仙台地方振興事務所" の除去
-                new_row[0] = new_row[0].replace('仙台合同庁舎', '').replace('／仙台地方振興事務所', '')
+                # 新しいヘッダーの各要素に対応するデータを追加
+                processed_row.append(current_kaigishitsu) # 会議室名
+                processed_row.append(start_datetime_str)# 開始日時
+                processed_row.append(end_datetime_str)  # 終了日時
                 
-                # Shift_JISでエンコードできない文字の置換 (例: 丸数字)
-                for j in range(len(new_row)):
-                    new_row[j] = new_row[j].replace('①', '1').replace('②', '2').replace('③', '3').replace('④', '4').replace('⑤', '5') \
+                # '利用目的詳細'のデータを探して追加
+                # original_header_for_indexingから'利用目的詳細'の元のインデックスを取得
+                try:
+                    purpose_detail_orig_idx = original_header_for_indexing.index('利用目的詳細')
+                    processed_row.append(row[purpose_detail_orig_idx] if purpose_detail_orig_idx < len(row) else '')
+                except ValueError:
+                    logging.warning("'利用目的詳細'が元のヘッダーに見つかりませんでした。空の文字列を追加します。")
+                    processed_row.append('')
+
+                # "仙台合同庁舎" と "／仙台地方振興事務所" の除去 (構築後に適用)
+                if len(processed_row) > 0: # 念のため配列の長さチェック
+                    processed_row[0] = processed_row[0].replace('仙台合同庁舎', '').replace('／仙台地方振興事務所', '')
+                
+                # Shift_JISでエンコードできない文字の置換 (例: 丸数字) (構築後に適用)
+                for j in range(len(processed_row)):
+                    processed_row[j] = processed_row[j].replace('①', '1').replace('②', '2').replace('③', '3').replace('④', '4').replace('⑤', '5') \
                                          .replace('⑥', '6').replace('⑦', '7').replace('⑧', '8').replace('⑨', '9').replace('⑩', '10')
 
-                # '利用目的詳細'カラムの値を"×"にする
-                if purpose_detail_final_index != -1 and purpose_detail_final_index < len(new_row):
-                    new_row[purpose_detail_final_index] = '×'
+                # '利用目的詳細'カラムの値を"×"にする (構築後に適用)
+                if purpose_detail_final_index != -1 and purpose_detail_final_index < len(processed_row):
+                    processed_row[purpose_detail_final_index] = '×'
                     logging.info(f"データ行で'利用目的詳細'カラムの値を'×'に設定しました。")
 
-                result_rows.append(new_row)
+                result_rows.append(processed_row)
 
         if len(result_rows) <= 1:
             msg = "エラー: 変換対象の予約データが見つかりませんでした。入力ファイルの形式を確認してください。"
