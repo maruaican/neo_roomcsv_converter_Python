@@ -1,0 +1,9 @@
+# --- PyInstaller ---
+# For output files
+build/
+*.spec
+# For .pkg, .toc, .pyz, .pyc files
+*.pkg
+*.toc
+*.pyz
+*.pyc
