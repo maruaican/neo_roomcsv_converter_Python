@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
+# CSVデータの入力開始ーーーーーーーーーーーーーーーーーーーーー
 # 試すエンコーディングのリスト (優先順位順)
 ENCODINGS_TO_TRY = ['utf-8', 'shift_jis', 'cp932']
 
@@ -76,7 +76,9 @@ def convert_csv(input_file_path, output_file_path):
 
         result_rows = []
         current_kaigishitsu = None
+# CSVデータの入力終了ーーーーーーーーーーーーーーーーーーーーー
 
+# CSVデータの変換処理開始ーーーーーーーーーーーーーーーーーーーーー
         # ヘッダー行の処理
         header_row = lines[0]
         header_row.insert(0, '会議室名')
@@ -112,7 +114,8 @@ def convert_csv(input_file_path, output_file_path):
             logging.warning(msg)
             print(msg)
             return
-
+# CSVデータの変換処理終了ーーーーーーーーーーーーーーーーーーーーー
+# CSVデータの出力ーーーーーーーーーーーーーーーーーーーーー
         # 変換後のデータをShift_JISで書き出し
         # encoding='shift_jis'でエンコードできない文字は'?'に置換 (errors='replace')
         with open(output_file_path, 'w', encoding='shift_jis', errors='replace', newline='') as f_out:
